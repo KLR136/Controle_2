@@ -1,43 +1,68 @@
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+const express = require('express');
+const path = require('path');
+const cookieParser = require('cookie-parser');
+const logger = require('morgan');
+require('dotenv').config();
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
-var tasksRouter = require('./routes/tasks'); // AJOUTEZ CETTE LIGNE
+// Import des routes
+const indexRouter = require('./public/routes/index');
+const tasksRouter = require('./public/routes/tasks');
+const tagsRouter = require('./public/routes/tags');
+const authRouter = require('./public/routes/auth');
 
-var app = express();
+// Import des modèles
+const db = require('./bin/models');
 
-// view engine setup
+const app = express();
+
+// Configuration du view engine
 app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'pug');
+app.set('view engine', 'ejs');
 
+// Middlewares
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-app.use('/tasks', tasksRouter); // AJOUTEZ CETTE LIGNE
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+// Injecter les modèles dans les requêtes
+app.use((req, res, next) => {
+  req.models = db;
+  next();
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+// Routes
+app.use('/', indexRouter);
+app.use('/tasks', tasksRouter);
+app.use('/tags', tagsRouter);
+app.use('/auth', authRouter); // Cette ligne manquait !
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+// Synchronisation de la base de données
+db.sequelize.sync({ force: false }).then(() => {
+  console.log('✅ Base de données prête');
+});
+
+// Gestion des erreurs 404
+app.use(function(req, res, next) {
+  res.status(404).render('error', { 
+    title: 'Page non trouvée',
+    message: 'Désolé, la page que vous cherchez n\'existe pas.' 
+  });
+});
+
+// Gestion des erreurs
+app.use(function(err, req, res, next) {
+  console.error(err.stack);
+  res.status(500).render('error', { 
+    title: 'Erreur serveur',
+    message: 'Quelque chose s\'est mal passé!' 
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
 });
 
 module.exports = app;
